@@ -7,33 +7,35 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
-type Question = {
-  id: number
-  question: string
-  options: string[]
-  correctAnswer: number
+type Alternative = {
+  id: string
+  text: string
+  isCorrect: boolean
+  explanation: string
+  order: number
 }
 
-const mathQuestions: Question[] = [
-  { id: 1, question: "Quanto é 15 + 28?", options: ["41", "43", "42", "44"], correctAnswer: 1 },
-  { id: 2, question: "Quanto é 50 - 23?", options: ["27", "26", "28", "25"], correctAnswer: 0 },
-  { id: 3, question: "Quanto é 34 + 17?", options: ["50", "52", "51", "49"], correctAnswer: 2 },
-  { id: 4, question: "Quanto é 82 - 45?", options: ["38", "36", "37", "39"], correctAnswer: 2 },
-  { id: 5, question: "Quanto é 29 + 36?", options: ["64", "65", "66", "63"], correctAnswer: 1 },
-  { id: 6, question: "Quanto é 73 - 28?", options: ["46", "44", "45", "47"], correctAnswer: 2 },
-  { id: 7, question: "Quanto é 48 + 55?", options: ["102", "103", "104", "101"], correctAnswer: 1 },
-  { id: 8, question: "Quanto é 91 - 37?", options: ["55", "54", "53", "56"], correctAnswer: 1 },
-  { id: 9, question: "Quanto é 63 + 29?", options: ["91", "93", "92", "90"], correctAnswer: 2 },
-  { id: 10, question: "Quanto é 100 - 58?", options: ["43", "41", "42", "44"], correctAnswer: 2 },
-]
+type Question = {
+  id: string
+  content: string
+  subject: string
+  statement: string
+  alternatives: Alternative[]
+  createdAt: string
+}
 
 type Stage = "setup" | "studying" | "quiz" | "results"
 
 export default function EducajuApp() {
   const [stage, setStage] = useState<Stage>("setup")
   const [studyTime, setStudyTime] = useState<string>("")
+  const [subject, setSubject] = useState<string>("")
+  const [content, setContent] = useState<string>("")
+  const [questionCount, setQuestionCount] = useState<string>("10")
   const [timeLeft, setTimeLeft] = useState<number>(0)
-  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false)
   const [results, setResults] = useState<{ correct: number; incorrect: number } | null>(null)
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export default function EducajuApp() {
       const timer = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
-            setStage("quiz")
+            generateQuestions()
             return 0
           }
           return prev - 1
@@ -51,12 +53,75 @@ export default function EducajuApp() {
     }
   }, [stage, timeLeft])
 
+  const generateQuestions = async () => {
+    setIsGeneratingQuestions(true)
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL_DEV || "https://educaju-backend.onrender.com"
+      const url = `${baseUrl}/api/questions/generate`
+      console.log("[v0] Calling API:", url)
+      console.log("[v0] Request body:", {
+        subject: subject,
+        content: content,
+        quantity: Number.parseInt(questionCount),
+      })
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subject: subject,
+          content: content,
+          quantity: Number.parseInt(questionCount),
+        }),
+      })
+
+      console.log("[v0] Response status:", response.status)
+      console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await response.text()
+        console.error("[v0] Expected JSON but got:", textResponse.substring(0, 200))
+        throw new Error("O servidor não retornou JSON. Verifique se a URL da API está correta.")
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error("[v0] Error response:", errorData)
+        throw new Error(errorData.message || `Erro HTTP: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("[v0] Questions received:", data.length)
+      setQuestions(data)
+      setStage("quiz")
+    } catch (error) {
+      console.error("[v0] Erro ao gerar questões:", error)
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido"
+      alert(
+        `Erro ao gerar questões: ${errorMessage}\n\nVerifique:\n1. A variável NEXT_PUBLIC_BASE_URL_DEV está configurada?\n2. O backend está rodando?\n3. A rota está correta?`,
+      )
+      setStage("setup")
+    } finally {
+      setIsGeneratingQuestions(false)
+    }
+  }
+
   const handleStartStudy = () => {
     const minutes = Number.parseInt(studyTime)
-    if (minutes > 0 && minutes <= 120) {
+    const count = Number.parseInt(questionCount)
+    if (minutes > 0 && minutes <= 120 && subject.trim() && content.trim() && count > 0 && count <= 50) {
       setTimeLeft(minutes * 60)
       setStage("studying")
     }
+  }
+
+  const handleSkipTimer = () => {
+    setTimeLeft(0)
+    generateQuestions()
   }
 
   const formatTime = (seconds: number) => {
@@ -65,16 +130,19 @@ export default function EducajuApp() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
   }
 
-  const handleAnswerChange = (questionId: number, optionIndex: number) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }))
+  const handleAnswerChange = (questionId: string, alternativeId: string) => {
+    setAnswers((prev) => ({ ...prev, [questionId]: alternativeId }))
   }
 
   const handleSubmit = () => {
     let correct = 0
     let incorrect = 0
 
-    mathQuestions.forEach((question) => {
-      if (answers[question.id] === question.correctAnswer) {
+    questions.forEach((question) => {
+      const selectedAlternativeId = answers[question.id]
+      const selectedAlternative = question.alternatives.find((alt) => alt.id === selectedAlternativeId)
+
+      if (selectedAlternative?.isCorrect) {
         correct++
       } else {
         incorrect++
@@ -88,12 +156,16 @@ export default function EducajuApp() {
   const handleRestart = () => {
     setStage("setup")
     setStudyTime("")
+    setSubject("")
+    setContent("")
+    setQuestionCount("10")
     setTimeLeft(0)
     setAnswers({})
+    setQuestions([])
     setResults(null)
   }
 
-  const allQuestionsAnswered = mathQuestions.every((q) => answers[q.id] !== undefined)
+  const allQuestionsAnswered = questions.length > 0 && questions.every((q) => answers[q.id] !== undefined)
 
   return (
     <div className="min-h-screen bg-cream">
@@ -101,7 +173,7 @@ export default function EducajuApp() {
       <header className="bg-dark-gray border-b border-border">
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-2xl md:text-3xl font-bold text-cream">Educaju</h1>
-          <p className="text-sm text-cream/80 mt-1">Aprender junto é sempre aprender melhor</p>
+          <p className="text-sm text-cream/80 mt-1">Estudo guiado com avaliação</p>
         </div>
       </header>
 
@@ -123,12 +195,56 @@ export default function EducajuApp() {
                   </svg>
                 </div>
                 <h2 className="text-2xl font-bold text-dark-gray mb-2">Vamos começar!</h2>
-                <p className="text-muted-foreground">
-                  Defina quanto tempo você quer estudar antes de fazer as questões
-                </p>
+                <p className="text-sm text-muted-foreground">Configure seu estudo e as questões que deseja responder</p>
               </div>
 
               <div className="space-y-4">
+                <div>
+                  <Label htmlFor="subject" className="text-base font-medium text-dark-gray">
+                    Matéria/Disciplina
+                  </Label>
+                  <Input
+                    id="subject"
+                    type="text"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Ex: História, Matemática, Geografia"
+                    className="mt-2 text-lg border-orange-primary/30 focus:border-orange-primary"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="content" className="text-base font-medium text-dark-gray">
+                    Conteúdo
+                  </Label>
+                  <Input
+                    id="content"
+                    type="text"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Ex: Guerra Fria, Equações do 2º grau"
+                    className="mt-2 text-lg border-orange-primary/30 focus:border-orange-primary"
+                  />
+                  <p className="text-sm text-muted-foreground mt-2">Tema específico que você vai estudar</p>
+                </div>
+
+                <div>
+                  <Label htmlFor="question-count" className="text-base font-medium text-dark-gray">
+                    Quantidade de questões
+                  </Label>
+                  <Input
+                    id="question-count"
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={questionCount}
+                    onChange={(e) => setQuestionCount(e.target.value)}
+                    placeholder="Ex: 10"
+                    className="mt-2 text-lg border-orange-primary/30 focus:border-orange-primary"
+                  />
+                  <p className="text-sm text-muted-foreground mt-2">Entre 1 e 50 questões</p>
+                </div>
+
                 <div>
                   <Label htmlFor="study-time" className="text-base font-medium text-dark-gray">
                     Tempo de estudo (minutos)
@@ -148,7 +264,14 @@ export default function EducajuApp() {
 
                 <Button
                   onClick={handleStartStudy}
-                  disabled={!studyTime || Number.parseInt(studyTime) <= 0}
+                  disabled={
+                    !studyTime ||
+                    Number.parseInt(studyTime) <= 0 ||
+                    !subject.trim() ||
+                    !content.trim() ||
+                    !questionCount ||
+                    Number.parseInt(questionCount) <= 0
+                  }
                   className="w-full bg-orange-primary hover:bg-orange-secondary text-cream font-semibold py-6 text-lg"
                   size="lg"
                 >
@@ -175,17 +298,36 @@ export default function EducajuApp() {
                   </svg>
                 </div>
                 <h2 className="text-3xl md:text-4xl font-bold text-dark-gray mb-3">Hora de estudar!</h2>
-                <p className="text-lg text-muted-foreground">
+                <p className="text-lg text-muted-foreground mb-2">
                   Foque nos seus estudos. As questões aparecerão ao final do tempo.
                 </p>
+                <div className="inline-block bg-orange-primary/10 px-4 py-2 rounded-lg mt-2">
+                  <p className="text-sm font-medium text-orange-primary">
+                    {subject} - {content}
+                  </p>
+                </div>
               </div>
 
               <div className="bg-orange-primary/5 rounded-lg p-8 border-2 border-orange-primary/30">
                 <div className="text-7xl md:text-8xl font-bold text-orange-primary tabular-nums">
-                  {formatTime(timeLeft)}
+                  {isGeneratingQuestions ? <div className="text-2xl">Gerando questões...</div> : formatTime(timeLeft)}
                 </div>
-                <p className="text-sm text-muted-foreground mt-4">Tempo restante</p>
+                <p className="text-sm text-muted-foreground mt-4">
+                  {isGeneratingQuestions ? "Aguarde um momento" : "Tempo restante"}
+                </p>
               </div>
+
+              {!isGeneratingQuestions && (
+                <div className="mt-6">
+                  <Button
+                    onClick={handleSkipTimer}
+                    variant="outline"
+                    className="border-orange-primary text-orange-primary hover:bg-orange-primary/10 bg-transparent"
+                  >
+                    Pular cronômetro e ir para as questões
+                  </Button>
+                </div>
+              )}
             </Card>
           </div>
         )}
@@ -205,28 +347,35 @@ export default function EducajuApp() {
                     />
                   </svg>
                 </div>
-                <h2 className="text-2xl md:text-3xl font-bold text-dark-gray mb-2">Questões de Matemática</h2>
-                <p className="text-muted-foreground">Responda as 10 questões abaixo</p>
+                <h2 className="text-2xl md:text-3xl font-bold text-dark-gray mb-2">Questões de {subject}</h2>
+                <p className="text-muted-foreground">
+                  Responda as {questions.length} {questions.length === 1 ? "questão" : "questões"} abaixo
+                </p>
               </div>
 
               <div className="space-y-6">
-                {mathQuestions.map((question, index) => (
+                {questions.map((question, index) => (
                   <div key={question.id} className="p-5 bg-cream/50 rounded-lg border border-border">
                     <h3 className="font-semibold text-dark-gray mb-4">
-                      {index + 1}. {question.question}
+                      {index + 1}. {question.statement}
                     </h3>
                     <RadioGroup
-                      value={answers[question.id]?.toString()}
-                      onValueChange={(value) => handleAnswerChange(question.id, Number.parseInt(value))}
+                      value={answers[question.id]}
+                      onValueChange={(value) => handleAnswerChange(question.id, value)}
                     >
-                      {question.options.map((option, optionIndex) => (
-                        <div key={optionIndex} className="flex items-center space-x-3 mb-2">
-                          <RadioGroupItem value={optionIndex.toString()} id={`q${question.id}-opt${optionIndex}`} />
-                          <Label htmlFor={`q${question.id}-opt${optionIndex}`} className="cursor-pointer text-base">
-                            {option}
-                          </Label>
-                        </div>
-                      ))}
+                      {question.alternatives
+                        .sort((a, b) => a.order - b.order)
+                        .map((alternative) => (
+                          <div key={alternative.id} className="flex items-center space-x-3 mb-2">
+                            <RadioGroupItem value={alternative.id} id={`q${question.id}-alt${alternative.id}`} />
+                            <Label
+                              htmlFor={`q${question.id}-alt${alternative.id}`}
+                              className="cursor-pointer text-base"
+                            >
+                              {alternative.text}
+                            </Label>
+                          </div>
+                        ))}
                     </RadioGroup>
                   </div>
                 ))}
@@ -241,7 +390,7 @@ export default function EducajuApp() {
                 >
                   {allQuestionsAnswered
                     ? "Enviar Respostas"
-                    : `Responda todas as questões (${Object.keys(answers).length}/10)`}
+                    : `Responda todas as questões (${Object.keys(answers).length}/${questions.length})`}
                 </Button>
               </div>
             </Card>
@@ -327,7 +476,7 @@ export default function EducajuApp() {
       {/* Footer */}
       <footer className="mt-12 py-6 bg-dark-gray/5 border-t border-border">
         <div className="container mx-auto px-4 text-center">
-          <p className="text-sm text-muted-foreground">© 2025 Educaju - Aprender junto é sempre aprender melhor</p>
+          <p className="text-sm text-muted-foreground">© 2025 Educaju - Estudo guiado com avaliação</p>
         </div>
       </footer>
     </div>
