@@ -293,7 +293,7 @@ export default function EducajuApp() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13M3 6.253C3 4.598 4.598 3 6.253 3h11.494C19.402 3 21 4.598 21 6.253v11.494C21 19.402 19.402 21 17.747 21H6.253C4.598 21 3 19.402 3 17.747V6.253z"
                     />
                   </svg>
                 </div>
@@ -399,9 +399,9 @@ export default function EducajuApp() {
 
         {/* Results Stage */}
         {stage === "results" && results && (
-          <div className="max-w-2xl mx-auto text-center">
-            <Card className="p-8 md:p-12 bg-white shadow-lg border-orange-primary/20">
-              <div className="mb-8">
+          <div className="max-w-4xl mx-auto">
+            <Card className="p-8 md:p-12 bg-white shadow-lg border-orange-primary/20 mb-8">
+              <div className="text-center mb-8">
                 <div
                   className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-6 ${
                     results.correct >= 7
@@ -469,6 +469,88 @@ export default function EducajuApp() {
                 Fazer Novo Estudo
               </Button>
             </Card>
+
+            {/* Detailed question review section */}
+            <div className="space-y-6">
+              <h3 className="text-2xl font-bold text-dark-gray text-center mb-6">Revisão das Questões</h3>
+              {questions.map((question, index) => {
+                const userAnswerId = answers[question.id]
+                const userAnswer = question.alternatives.find((alt) => alt.id === userAnswerId)
+                const correctAnswer = question.alternatives.find((alt) => alt.isCorrect)
+                const isCorrect = userAnswer?.isCorrect || false
+
+                return (
+                  <Card
+                    key={question.id}
+                    className={`p-6 border-2 ${
+                      isCorrect ? "border-green-500/30 bg-green-500/5" : "border-red-primary/30 bg-red-primary/5"
+                    }`}
+                  >
+                    {/* Question header with status */}
+                    <div className="flex items-start gap-4 mb-4">
+                      <div
+                        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                          isCorrect ? "bg-green-500/20" : "bg-red-primary/20"
+                        }`}
+                      >
+                        {isCorrect ? (
+                          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg
+                            className="w-6 h-6 text-red-primary"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-semibold text-muted-foreground">Questão {index + 1}</span>
+                          <span className={`text-sm font-bold ${isCorrect ? "text-green-600" : "text-red-primary"}`}>
+                            {isCorrect ? "CORRETA" : "INCORRETA"}
+                          </span>
+                        </div>
+                        <h4 className="text-lg font-semibold text-dark-gray">{question.statement}</h4>
+                      </div>
+                    </div>
+
+                    {/* User's answer */}
+                    <div className="mb-4 p-4 bg-white rounded-lg border border-border">
+                      <p className="text-sm font-medium text-muted-foreground mb-2">Sua resposta:</p>
+                      <p className={`font-medium ${isCorrect ? "text-green-600" : "text-red-primary"}`}>
+                        {userAnswer?.text}
+                      </p>
+                    </div>
+
+                    {/* Correct answer if user was wrong */}
+                    {!isCorrect && correctAnswer && (
+                      <div className="mb-4 p-4 bg-green-500/5 rounded-lg border border-green-500/30">
+                        <p className="text-sm font-medium text-muted-foreground mb-2">Resposta correta:</p>
+                        <p className="font-medium text-green-600">{correctAnswer.text}</p>
+                      </div>
+                    )}
+
+                    {/* Explanation */}
+                    <div className="p-4 bg-orange-primary/5 rounded-lg border border-orange-primary/20">
+                      <p className="text-sm font-medium text-orange-primary mb-2">Explicação:</p>
+                      <p className="text-dark-gray leading-relaxed">
+                        {isCorrect ? userAnswer?.explanation : correctAnswer?.explanation}
+                      </p>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
           </div>
         )}
       </main>
