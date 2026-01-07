@@ -56,7 +56,7 @@ export default function EducajuApp() {
   const generateQuestions = async () => {
     setIsGeneratingQuestions(true)
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL_DEV || "https://educaju-backend.onrender.com"
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL_DEV || "http://localhost:3000"
       const url = `${baseUrl}/api/questions/generate`
       console.log("[v0] Calling API:", url)
       console.log("[v0] Request body:", {
@@ -173,7 +173,7 @@ export default function EducajuApp() {
       <header className="bg-dark-gray border-b border-border">
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-2xl md:text-3xl font-bold text-cream">Educaju</h1>
-          <p className="text-sm text-cream/80 mt-1">Estudo guiado com avaliação</p>
+          <p className="text-sm text-cream/80 mt-1">Aprender junto é sempre aprender melhor</p>
         </div>
       </header>
 
